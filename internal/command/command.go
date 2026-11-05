@@ -67,6 +67,9 @@ func (cmd *Command) Handle() ([]byte, error) {
 	case "CMS.INITBYPROB", "CMS.INITBYDIM", "CMS.INCRBY", "CMS.QUERY":
 		return cmd.handleCMS()
 
+	case "BF.RESERVE", "BF.ADD", "BF.EXISTS", "BF.MADD", "BF.MEXISTS":
+		return cmd.handleBloom()
+
 	default:
 		return nil, ErrUnknownCommand
 	}
