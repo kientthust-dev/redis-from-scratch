@@ -64,6 +64,9 @@ func (cmd *Command) Handle() ([]byte, error) {
 	case "ZADD", "ZSCORE", "ZRANK":
 		return cmd.handleSortedSet()
 
+	case "CMS.INITBYPROB", "CMS.INITBYDIM", "CMS.INCRBY", "CMS.QUERY":
+		return cmd.handleCMS()
+
 	default:
 		return nil, ErrUnknownCommand
 	}

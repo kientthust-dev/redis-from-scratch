@@ -22,6 +22,7 @@ type CountMinSketch struct {
 	delta   float64
 }
 
+// NewCountMinSketch initializes CMS using error rate and probability.
 func NewCountMinSketch(epsilon, delta float64) (*CountMinSketch, error) {
 	if math.IsNaN(epsilon) || math.IsInf(epsilon, 0) ||
 		math.IsNaN(delta) || math.IsInf(delta, 0) {
@@ -34,6 +35,27 @@ func NewCountMinSketch(epsilon, delta float64) (*CountMinSketch, error) {
 
 	width := uint64(math.Ceil(math.E / epsilon))
 	depth := uint64(math.Ceil(math.Log(1 / delta)))
+
+	return newCountMinSketch(width, depth, epsilon, delta)
+}
+
+// NewCountMinSketchByDim initializes CMS using width and depth.
+func NewCountMinSketchByDim(width, depth uint32) (*CountMinSketch, error) {
+	if width == 0 || depth == 0 {
+		return nil, errors.New("CMS width and depth must be greater than zero")
+	}
+
+	return newCountMinSketch(uint64(width), uint64(depth), 0, 0)
+}
+
+// newCountMinSketch allocates the counter matrix after validating dimensions.
+func newCountMinSketch(
+	width, depth uint64,
+	epsilon, delta float64,
+) (*CountMinSketch, error) {
+	if width == 0 || depth == 0 {
+		return nil, errors.New("CMS width and depth must be greater than zero")
+	}
 
 	if width > MaxCMSCounters/depth {
 		return nil, errors.New("CMS allocation exceeds counter limit")
