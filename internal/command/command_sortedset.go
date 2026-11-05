@@ -54,13 +54,10 @@ func (cmd *Command) zadd() ([]byte, error) {
 	now := time.Now()
 	var added int64
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 
 	if exists && e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		exists = false
 	}
 
@@ -92,7 +89,7 @@ func (cmd *Command) zadd() ([]byte, error) {
 		}
 	}
 
-	store.data[key] = e
+	store[key] = e
 	return protocol.Encode(added)
 }
 
@@ -104,16 +101,13 @@ func (cmd *Command) zscore() ([]byte, error) {
 	key, member := cmd.Args[0], cmd.Args[1]
 	now := time.Now()
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if !exists {
 		return protocol.Encode(nil)
 	}
 
 	if e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		return protocol.Encode(nil)
 	}
 
@@ -144,16 +138,13 @@ func (cmd *Command) zrank() ([]byte, error) {
 	key, member := cmd.Args[0], cmd.Args[1]
 	now := time.Now()
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if !exists {
 		return protocol.Encode(nil)
 	}
 
 	if e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		return protocol.Encode(nil)
 	}
 

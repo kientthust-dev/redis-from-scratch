@@ -1,9 +1,6 @@
 package command
 
-import (
-	"sync"
-	"time"
-)
+import "time"
 
 type DataType uint8
 
@@ -22,15 +19,4 @@ type entry struct {
 	hasExpiry bool
 }
 
-type Storage struct {
-	mu   sync.RWMutex
-	data map[string]entry
-}
-
-func NewStorage() *Storage {
-	return &Storage{
-		data: make(map[string]entry),
-	}
-}
-
-var store = NewStorage()
+var store = make(map[string]entry)

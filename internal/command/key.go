@@ -24,21 +24,18 @@ func (cmd *Command) del() ([]byte, error) {
 	now := time.Now()
 	deleted := int64(0)
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
 	for _, key := range cmd.Args {
-		e, exists := store.data[key]
+		e, exists := store[key]
 		if !exists {
 			continue
 		}
 
 		if e.hasExpiry && !now.Before(e.expireAt) {
-			delete(store.data, key)
+			delete(store, key)
 			continue
 		}
 
-		delete(store.data, key)
+		delete(store, key)
 		deleted++
 	}
 
@@ -53,17 +50,14 @@ func (cmd *Command) exists() ([]byte, error) {
 	now := time.Now()
 	count := int64(0)
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
 	for _, key := range cmd.Args {
-		e, exists := store.data[key]
+		e, exists := store[key]
 		if !exists {
 			continue
 		}
 
 		if e.hasExpiry && !now.Before(e.expireAt) {
-			delete(store.data, key)
+			delete(store, key)
 			continue
 		}
 

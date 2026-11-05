@@ -38,12 +38,10 @@ func (cmd *Command) set() ([]byte, error) {
 	key := cmd.Args[0]
 	value := cmd.Args[1]
 
-	store.mu.Lock()
-	store.data[key] = entry{
+	store[key] = entry{
 		data:     value,
 		dataType: TypeString,
 	}
-	store.mu.Unlock()
 
 	return protocol.Encode("OK")
 }
@@ -55,15 +53,11 @@ func (cmd *Command) get() ([]byte, error) {
 
 	key := cmd.Args[0]
 
-	store.mu.Lock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if exists && e.hasExpiry && !time.Now().Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		exists = false
 	}
-
-	store.mu.Unlock()
 
 	if !exists {
 		return protocol.Encode(nil)

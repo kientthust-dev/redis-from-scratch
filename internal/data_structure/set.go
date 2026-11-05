@@ -1,10 +1,7 @@
 package data_structure
 
-import "sync"
-
 // Set stores unique string members.
 type Set struct {
-	mu      sync.RWMutex
 	members map[string]struct{}
 }
 
@@ -18,9 +15,6 @@ func NewSet() *Set {
 // Add inserts member into the Set.
 // It returns true if the member did not previously exist.
 func (s *Set) Add(member string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.members[member]; exists {
 		return false
 	}
@@ -32,9 +26,6 @@ func (s *Set) Add(member string) bool {
 // Remove deletes member from the Set.
 // It returns true if the member existed.
 func (s *Set) Remove(member string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if _, exists := s.members[member]; !exists {
 		return false
 	}
@@ -45,9 +36,6 @@ func (s *Set) Remove(member string) bool {
 
 // Contains reports whether member exists in the Set.
 func (s *Set) Contains(member string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	_, exists := s.members[member]
 	return exists
 }
@@ -55,9 +43,6 @@ func (s *Set) Contains(member string) bool {
 // Members returns a snapshot of all members.
 // The order of members is unspecified.
 func (s *Set) Members() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	members := make([]string, 0, len(s.members))
 	for member := range s.members {
 		members = append(members, member)
@@ -67,8 +52,5 @@ func (s *Set) Members() []string {
 
 // Len returns the number of members.
 func (s *Set) Len() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	return len(s.members)
 }

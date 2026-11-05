@@ -33,13 +33,10 @@ func (cmd *Command) sadd() ([]byte, error) {
 	now := time.Now()
 	var added int64
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 
 	if exists && e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		exists = false
 	}
 
@@ -71,7 +68,7 @@ func (cmd *Command) sadd() ([]byte, error) {
 		}
 	}
 
-	store.data[key] = e
+	store[key] = e
 	return protocol.Encode(added)
 }
 
@@ -85,16 +82,13 @@ func (cmd *Command) srem() ([]byte, error) {
 	now := time.Now()
 	var removed int64
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if !exists {
 		return protocol.Encode(removed)
 	}
 
 	if e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		return protocol.Encode(removed)
 	}
 
@@ -116,7 +110,7 @@ func (cmd *Command) srem() ([]byte, error) {
 	}
 
 	if set.Len() == 0 {
-		delete(store.data, key)
+		delete(store, key)
 	}
 
 	return protocol.Encode(removed)
@@ -131,16 +125,13 @@ func (cmd *Command) sismember() ([]byte, error) {
 	member := cmd.Args[1]
 	now := time.Now()
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if !exists {
 		return protocol.Encode(int64(0))
 	}
 
 	if e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		return protocol.Encode(int64(0))
 	}
 
@@ -170,16 +161,13 @@ func (cmd *Command) smembers() ([]byte, error) {
 	key := cmd.Args[0]
 	now := time.Now()
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	e, exists := store.data[key]
+	e, exists := store[key]
 	if !exists {
 		return protocol.Encode([]interface{}{})
 	}
 
 	if e.hasExpiry && !now.Before(e.expireAt) {
-		delete(store.data, key)
+		delete(store, key)
 		return protocol.Encode([]interface{}{})
 	}
 
