@@ -20,6 +20,9 @@ type CountMinSketch struct {
 
 	epsilon float64
 	delta   float64
+
+	// Total number of increments added to the CMS.
+	count uint64
 }
 
 // NewCountMinSketch initializes CMS using error rate and probability.
@@ -77,6 +80,7 @@ func newCountMinSketch(
 		width:    uint32(width),
 		epsilon:  epsilon,
 		delta:    delta,
+		count:    0,
 	}, nil
 }
 
@@ -122,7 +126,19 @@ func (cms *CountMinSketch) IncrBy(item string, value uint32) uint32 {
 		}
 	}
 
+	// Update the total number of increments.
+	if cms.count > math.MaxUint64-uint64(value) {
+		cms.count = math.MaxUint64
+	} else {
+		cms.count += uint64(value)
+	}
+
 	return minCount
+}
+
+// Info returns the CMS dimensions and total number of increments.
+func (cms *CountMinSketch) Info() (width, depth uint32, count uint64) {
+	return cms.width, cms.depth, cms.count
 }
 
 func (cms *CountMinSketch) Count(item string) uint32 {

@@ -24,6 +24,9 @@ func (cmd *Command) handleCMS() ([]byte, error) {
 	case "CMS.QUERY":
 		return cmd.cmsQuery()
 
+	case "CMS.INFO":
+		return cmd.cmsInfo()
+
 	default:
 		return nil, ErrUnknownCommand
 	}
@@ -249,6 +252,44 @@ func (cmd *Command) cmsQuery() ([]byte, error) {
 	for _, item := range cmd.Args[1:] {
 		count := cms.Count(item)
 		results = append(results, int64(count))
+	}
+
+	return protocol.Encode(results)
+}
+
+// cmsInfo returns information about a Count-Min Sketch.
+//
+// Syntax:
+// CMS.INFO key
+func (cmd *Command) cmsInfo() ([]byte, error) {
+	if len(cmd.Args) != 1 {
+		return nil, ErrWrongNumberOfArguments
+	}
+
+	key := cmd.Args[0]
+
+	cms, exists, wrongType := lookupCMS(key)
+
+	if !exists {
+		return protocol.Encode(
+			protocol.RespError("CMS: key does not exist"),
+		)
+	}
+
+	if wrongType {
+		return protocol.Encode(
+			protocol.RespError(
+				"WRONGTYPE Operation against a key holding the wrong kind of value",
+			),
+		)
+	}
+
+	width, depth, count := cms.Info()
+
+	results := []interface{}{
+		"width", int64(width),
+		"depth", int64(depth),
+		"count", int64(count),
 	}
 
 	return protocol.Encode(results)
