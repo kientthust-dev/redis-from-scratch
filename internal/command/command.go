@@ -71,6 +71,9 @@ func (cmd *Command) Handle() ([]byte, error) {
 	case "BF.RESERVE", "BF.ADD", "BF.EXISTS", "BF.MADD", "BF.MEXISTS":
 		return cmd.handleBloom()
 
+	case "INFO":
+		return cmd.handleInfo()
+
 	default:
 		return nil, ErrUnknownCommand
 	}
