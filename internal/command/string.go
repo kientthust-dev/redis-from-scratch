@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+const (
+	responsePong   = "PONG"
+	responseOK     = "OK"
+	wrongTypeError = "WRONGTYPE Operation against a key holding the wrong kind of value"
+)
+
 func (cmd *Command) handleString() ([]byte, error) {
 	switch strings.ToUpper(cmd.Name) {
 	case "PING":
@@ -22,7 +28,7 @@ func (cmd *Command) handleString() ([]byte, error) {
 func (cmd *Command) ping() ([]byte, error) {
 	switch len(cmd.Args) {
 	case 0:
-		return protocol.Encode("PONG")
+		return protocol.Encode(responsePong)
 	case 1:
 		return protocol.Encode([]byte(cmd.Args[0]))
 	default:
@@ -48,7 +54,7 @@ func (cmd *Command) set() ([]byte, error) {
 		lastAccess: time.Now(),
 	}
 
-	return protocol.Encode("OK")
+	return protocol.Encode(responseOK)
 }
 
 func (cmd *Command) get() ([]byte, error) {
@@ -69,7 +75,7 @@ func (cmd *Command) get() ([]byte, error) {
 	}
 
 	if e.dataType != TypeString {
-		return protocol.Encode(protocol.RespError("WRONGTYPE Operation against a key holding the wrong kind of value"))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	value, ok := e.data.(string)

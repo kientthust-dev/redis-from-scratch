@@ -41,9 +41,7 @@ func (cmd *Command) sadd() ([]byte, error) {
 	}
 
 	if exists && e.dataType != TypeSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	var set *data_structure.Set
@@ -99,9 +97,7 @@ func (cmd *Command) srem() ([]byte, error) {
 	}
 
 	if e.dataType != TypeSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	set, ok := e.data.(*data_structure.Set)
@@ -143,9 +139,7 @@ func (cmd *Command) sismember() ([]byte, error) {
 	}
 
 	if e.dataType != TypeSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	set, ok := e.data.(*data_structure.Set)
@@ -180,9 +174,7 @@ func (cmd *Command) smembers() ([]byte, error) {
 	}
 
 	if e.dataType != TypeSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	set, ok := e.data.(*data_structure.Set)

@@ -190,11 +190,7 @@ func (cmd *Command) cmsIncrBy() ([]byte, error) {
 	}
 
 	if wrongType {
-		return protocol.Encode(
-			protocol.RespError(
-				"WRONGTYPE Operation against a key holding the wrong kind of value",
-			),
-		)
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	// Parse and validate all increments before modifying the CMS.
@@ -252,11 +248,7 @@ func (cmd *Command) cmsQuery() ([]byte, error) {
 	}
 
 	if wrongType {
-		return protocol.Encode(
-			protocol.RespError(
-				"WRONGTYPE Operation against a key holding the wrong kind of value",
-			),
-		)
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	updateLastAccess(key)
@@ -290,11 +282,7 @@ func (cmd *Command) cmsInfo() ([]byte, error) {
 	}
 
 	if wrongType {
-		return protocol.Encode(
-			protocol.RespError(
-				"WRONGTYPE Operation against a key holding the wrong kind of value",
-			),
-		)
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	updateLastAccess(key)

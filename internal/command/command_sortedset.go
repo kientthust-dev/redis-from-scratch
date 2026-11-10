@@ -10,6 +10,10 @@ import (
 	"redis_core/internal/protocol"
 )
 
+const (
+	sortedSetInvalidScore = "ERR value is not a valid float"
+)
+
 // handleSortedSet dispatches sorted-set commands.
 func (cmd *Command) handleSortedSet() ([]byte, error) {
 	switch strings.ToUpper(cmd.Name) {
@@ -42,7 +46,7 @@ func (cmd *Command) zadd() ([]byte, error) {
 	for i := 1; i < len(cmd.Args); i += 2 {
 		score, err := strconv.ParseFloat(cmd.Args[i], 64)
 		if err != nil || math.IsNaN(score) || math.IsInf(score, 0) {
-			return protocol.Encode(protocol.RespError("ERR value is not a valid float"))
+			return protocol.Encode(protocol.RespError(sortedSetInvalidScore))
 		}
 
 		pairs = append(pairs, pair{
@@ -62,9 +66,7 @@ func (cmd *Command) zadd() ([]byte, error) {
 	}
 
 	if exists && e.dataType != TypeSortedSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	var ss *data_structure.SortedSet
@@ -118,9 +120,7 @@ func (cmd *Command) zscore() ([]byte, error) {
 	}
 
 	if e.dataType != TypeSortedSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	ss, ok := e.data.(*data_structure.SortedSet)
@@ -156,9 +156,7 @@ func (cmd *Command) zrank() ([]byte, error) {
 	}
 
 	if e.dataType != TypeSortedSet {
-		return protocol.Encode(protocol.RespError(
-			"WRONGTYPE Operation against a key holding the wrong kind of value",
-		))
+		return protocol.Encode(protocol.RespError(wrongTypeError))
 	}
 
 	ss, ok := e.data.(*data_structure.SortedSet)

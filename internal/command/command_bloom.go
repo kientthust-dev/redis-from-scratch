@@ -10,9 +10,12 @@ import (
 	"redis_core/internal/protocol"
 )
 
-var errBloomWrongType = errors.New(
-	"WRONGTYPE Operation against a key holding the wrong kind of value",
+const (
+	defaultBloomCapacity  = 100
+	defaultBloomErrorRate = 0.01
 )
+
+var errBloomWrongType = errors.New(wrongTypeError)
 
 // handleBloom dispatches Bloom Filter commands.
 func (cmd *Command) handleBloom() ([]byte, error) {
@@ -146,7 +149,7 @@ func getOrCreateBloom(key string) (*data_structure.Bloom, error) {
 		return bloom, nil
 	}
 
-	bloom, err := data_structure.CreateBloomFilter(100, 0.01)
+	bloom, err := data_structure.CreateBloomFilter(defaultBloomCapacity, defaultBloomErrorRate)
 	if err != nil {
 		return nil, err
 	}

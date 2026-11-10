@@ -7,6 +7,11 @@ import (
 	"redis_core/internal/config"
 )
 
+const (
+	evictionPolicyRandom = "random"
+	evictionPolicyLRU    = "lru"
+)
+
 var errCapacityUnavailable = errors.New("unable to make room for a new key")
 
 // evictRandom removes one randomly selected key from the store.
@@ -95,10 +100,10 @@ func ensureCapacity() bool {
 	}
 
 	switch config.EvictionPolicy {
-	case "random":
+	case evictionPolicyRandom:
 		return evictRandom()
 
-	case "lru":
+	case evictionPolicyLRU:
 		return evictLRU(config.EvictionSamples)
 
 	default:
