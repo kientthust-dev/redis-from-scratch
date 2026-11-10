@@ -107,9 +107,14 @@ func (cmd *Command) cmsInitByProb() ([]byte, error) {
 		)
 	}
 
+	if !ensureCapacity() {
+		return encodeCapacityError()
+	}
+
 	store[key] = entry{
-		data:     cms,
-		dataType: TypeCountMinSketch,
+		data:       cms,
+		dataType:   TypeCountMinSketch,
+		lastAccess: time.Now(),
 	}
 
 	return protocol.Encode("OK")
@@ -152,9 +157,14 @@ func (cmd *Command) cmsInitByDim() ([]byte, error) {
 		)
 	}
 
+	if !ensureCapacity() {
+		return encodeCapacityError()
+	}
+
 	store[key] = entry{
-		data:     cms,
-		dataType: TypeCountMinSketch,
+		data:       cms,
+		dataType:   TypeCountMinSketch,
+		lastAccess: time.Now(),
 	}
 
 	return protocol.Encode("OK")
@@ -209,6 +219,8 @@ func (cmd *Command) cmsIncrBy() ([]byte, error) {
 		})
 	}
 
+	updateLastAccess(key)
+
 	// Apply all increments after successful validation.
 	results := make([]interface{}, 0, len(increments))
 
@@ -247,6 +259,7 @@ func (cmd *Command) cmsQuery() ([]byte, error) {
 		)
 	}
 
+	updateLastAccess(key)
 	results := make([]interface{}, 0, len(cmd.Args)-1)
 
 	for _, item := range cmd.Args[1:] {
@@ -284,6 +297,7 @@ func (cmd *Command) cmsInfo() ([]byte, error) {
 		)
 	}
 
+	updateLastAccess(key)
 	width, depth, count := cms.Info()
 
 	results := []interface{}{

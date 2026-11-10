@@ -117,9 +117,14 @@ func (cmd *Command) bfReserve() ([]byte, error) {
 		)
 	}
 
+	if !ensureCapacity() {
+		return encodeCapacityError()
+	}
+
 	store[key] = entry{
-		data:     bloom,
-		dataType: TypeBloomFilter,
+		data:       bloom,
+		dataType:   TypeBloomFilter,
+		lastAccess: time.Now(),
 	}
 
 	return protocol.Encode("OK")
@@ -146,9 +151,14 @@ func getOrCreateBloom(key string) (*data_structure.Bloom, error) {
 		return nil, err
 	}
 
+	if !ensureCapacity() {
+		return nil, errCapacityUnavailable
+	}
+
 	store[key] = entry{
-		data:     bloom,
-		dataType: TypeBloomFilter,
+		data:       bloom,
+		dataType:   TypeBloomFilter,
+		lastAccess: time.Now(),
 	}
 
 	return bloom, nil
@@ -176,6 +186,7 @@ func (cmd *Command) bfAdd() ([]byte, error) {
 	}
 
 	added := bloom.AddIfNotExist(item)
+	updateLastAccess(key)
 
 	if added {
 		return protocol.Encode(int64(1))
@@ -213,6 +224,7 @@ func (cmd *Command) bfExists() ([]byte, error) {
 		return protocol.Encode(int64(0))
 	}
 
+	updateLastAccess(key)
 	if bloom.Exist(item) {
 		return protocol.Encode(int64(1))
 	}
@@ -251,6 +263,7 @@ func (cmd *Command) bfMAdd() ([]byte, error) {
 		}
 	}
 
+	updateLastAccess(key)
 	return protocol.Encode(results)
 }
 
@@ -286,6 +299,7 @@ func (cmd *Command) bfMExists() ([]byte, error) {
 		return protocol.Encode(results)
 	}
 
+	updateLastAccess(key)
 	for _, item := range cmd.Args[1:] {
 		if bloom.Exist(item) {
 			results = append(results, int64(1))

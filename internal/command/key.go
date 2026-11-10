@@ -16,6 +16,20 @@ func (cmd *Command) handleKey() ([]byte, error) {
 	}
 }
 
+func updateLastAccess(key string) {
+	e, exists := store[key]
+	if !exists {
+		return
+	}
+
+	e.lastAccess = time.Now()
+	store[key] = e
+}
+
+func encodeCapacityError() ([]byte, error) {
+	return protocol.Encode(protocol.RespError("ERR " + errCapacityUnavailable.Error()))
+}
+
 func (cmd *Command) del() ([]byte, error) {
 	if len(cmd.Args) == 0 {
 		return nil, ErrWrongNumberOfArguments
@@ -61,6 +75,7 @@ func (cmd *Command) exists() ([]byte, error) {
 			continue
 		}
 
+		updateLastAccess(key)
 		count++
 	}
 

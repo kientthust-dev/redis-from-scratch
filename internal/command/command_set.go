@@ -54,11 +54,17 @@ func (cmd *Command) sadd() ([]byte, error) {
 		if !ok || set == nil {
 			return nil, ErrInvalidCommand
 		}
+		e.lastAccess = now
 	} else {
+		if !ensureCapacity() {
+			return encodeCapacityError()
+		}
+
 		set = data_structure.NewSet()
 		e = entry{
-			data:     set,
-			dataType: TypeSet,
+			data:       set,
+			dataType:   TypeSet,
+			lastAccess: now,
 		}
 	}
 
@@ -103,6 +109,7 @@ func (cmd *Command) srem() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	for _, member := range members {
 		if set.Remove(member) {
 			removed++
@@ -146,6 +153,7 @@ func (cmd *Command) sismember() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	if set.Contains(member) {
 		return protocol.Encode(int64(1))
 	}
@@ -182,6 +190,7 @@ func (cmd *Command) smembers() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	rawMembers := set.Members()
 	members := make([]interface{}, 0, len(rawMembers))
 

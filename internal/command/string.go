@@ -38,9 +38,14 @@ func (cmd *Command) set() ([]byte, error) {
 	key := cmd.Args[0]
 	value := cmd.Args[1]
 
+	if !keyExists(key) && !ensureCapacity() {
+		return encodeCapacityError()
+	}
+
 	store[key] = entry{
-		data:     value,
-		dataType: TypeString,
+		data:       value,
+		dataType:   TypeString,
+		lastAccess: time.Now(),
 	}
 
 	return protocol.Encode("OK")
@@ -72,5 +77,6 @@ func (cmd *Command) get() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	return protocol.Encode([]byte(value))
 }

@@ -75,11 +75,17 @@ func (cmd *Command) zadd() ([]byte, error) {
 		if !ok || ss == nil {
 			return nil, ErrInvalidCommand
 		}
+		e.lastAccess = now
 	} else {
+		if !ensureCapacity() {
+			return encodeCapacityError()
+		}
+
 		ss = data_structure.NewSortedSet()
 		e = entry{
-			data:     ss,
-			dataType: TypeSortedSet,
+			data:       ss,
+			dataType:   TypeSortedSet,
+			lastAccess: now,
 		}
 	}
 
@@ -122,6 +128,7 @@ func (cmd *Command) zscore() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	score, exists := ss.Score(member)
 	if !exists {
 		return protocol.Encode(nil)
@@ -159,6 +166,7 @@ func (cmd *Command) zrank() ([]byte, error) {
 		return nil, ErrInvalidCommand
 	}
 
+	updateLastAccess(key)
 	rank, exists := ss.Rank(member)
 	if !exists {
 		return protocol.Encode(nil)

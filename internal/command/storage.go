@@ -13,13 +13,25 @@ const (
 )
 
 type entry struct {
-	data      interface{}
-	dataType  DataType
-	expireAt  time.Time
-	hasExpiry bool
+	data       interface{}
+	dataType   DataType
+	expireAt   time.Time
+	hasExpiry  bool
+	lastAccess time.Time
 }
 
 var store = make(map[string]entry)
+
+// purgeExpiredKeys removes all expired keys from the store.
+func purgeExpiredKeys() {
+	now := time.Now()
+
+	for key, item := range store {
+		if item.hasExpiry && !item.expireAt.After(now) {
+			delete(store, key)
+		}
+	}
+}
 
 // getKeyspaceStats returns the number of valid keys,
 // the number of keys with expiration, and their average remaining TTL

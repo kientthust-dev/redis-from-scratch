@@ -35,6 +35,7 @@ func (cmd *Command) ttl() ([]byte, error) {
 		return protocol.Encode(-2)
 	}
 
+	updateLastAccess(key)
 	if !e.hasExpiry {
 		return protocol.Encode(-1)
 	}
@@ -72,12 +73,14 @@ func (cmd *Command) expire() ([]byte, error) {
 	}
 
 	if seconds <= 0 {
+		updateLastAccess(key)
 		delete(store, key)
 		return protocol.Encode(1)
 	}
 
 	e.expireAt = now.Add(time.Duration(seconds) * time.Second)
 	e.hasExpiry = true
+	e.lastAccess = now
 	store[key] = e
 
 	return protocol.Encode(1)
