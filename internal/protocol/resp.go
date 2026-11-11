@@ -52,8 +52,41 @@ func parse(data []byte, depth int) (interface{}, int, error) {
 		}
 		return parseArray(data[1:], depth+1)
 	default:
+		return parseInlineCommand(data)
+	}
+}
+
+// parseInlineCommand parses an inline command terminated by CRLF.
+func parseInlineCommand(data []byte) (interface{}, int, error) {
+	// Find the end of the inline command.
+	end := bytes.Index(data, []byte(CRLF))
+	if end == -1 {
+		// Wait for more data if CRLF has not arrived yet.
+		if bytes.Contains(data, []byte("\n")) {
+			return nil, 0, ErrInvalidResp
+		}
+		return nil, 0, ErrNeedMoreData
+	}
+
+	line := data[:end]
+
+	if len(line) == 0 {
 		return nil, 0, ErrInvalidResp
 	}
+
+	// Split the command into tokens.
+	tokens := bytes.Fields(line)
+	if len(tokens) == 0 {
+		return nil, 0, ErrInvalidResp
+	}
+
+	// Convert tokens to the format expected by command.ParseCommand().
+	result := make([]interface{}, len(tokens))
+	for i, token := range tokens {
+		result[i] = token
+	}
+
+	return result, end + len(CRLF), nil
 }
 
 // readLine reads a CRLF-terminated line.
