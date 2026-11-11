@@ -146,12 +146,12 @@ func (ep *Epoll) drainWakeupFD() error {
 	}
 }
 
-func (ep *Epoll) Wait() ([]Event, error) {
+func (ep *Epoll) Wait(timeoutMs int) ([]Event, error) {
 	for {
 		n, err := syscall.EpollWait(
 			ep.epfd,
 			ep.epollEvents,
-			-1,
+			timeoutMs,
 		)
 
 		if err != nil {

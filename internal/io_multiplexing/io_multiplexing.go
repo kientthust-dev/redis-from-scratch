@@ -18,6 +18,6 @@ type IOMultiplexer interface {
 	Update(event Event) error
 	Remove(fd int) error
 	Wakeup() error
-	Wait() ([]Event, error)
+	Wait(timeoutMs int) ([]Event, error)
 	Close() error
 }

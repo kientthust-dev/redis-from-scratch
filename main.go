@@ -6,12 +6,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"redis_core/internal/command"
 	"redis_core/internal/config"
 	"redis_core/internal/io_multiplexing"
 	"redis_core/internal/protocol"
 )
+
+const shutdownTimeout = 10 * time.Second
 
 func main() {
 	// Start listening for incoming connections
@@ -118,9 +121,23 @@ func main() {
 	clientWriteBuffers := make(map[int][]byte)
 
 	shuttingDown := false
+	var shutdownDeadline time.Time
 
 	for {
-		events, err := mux.Wait()
+		timeoutMs := -1
+
+		if shuttingDown {
+			remaining := time.Until(shutdownDeadline)
+
+			if remaining <= 0 {
+				timeoutMs = 0
+			} else {
+				timeoutMs = int((remaining + time.Millisecond - 1) / time.Millisecond)
+			}
+		}
+
+		events, err := mux.Wait(timeoutMs)
+
 		if err != nil {
 			log.Fatalf("Failed to wait for events: %v", err)
 		}
@@ -131,6 +148,9 @@ func main() {
 				log.Println("Event loop received wakeup event")
 
 				shuttingDown = true
+
+				shutdownDeadline = time.Now().Add(shutdownTimeout)
+				log.Printf("Graceful shutdown deadline: %s", shutdownDeadline.Format(time.RFC3339))
 
 				// Stop monitoring the listening socket.
 				if err := mux.Remove(serverFd); err != nil {
@@ -201,10 +221,27 @@ func main() {
 				}
 			}
 		}
+
 		// Exit the event loop after all clients have disconnected.
-		if shuttingDown && len(clientReadBuffers) == 0 {
-			log.Println("All clients closed. Shutting down server.")
-			break
+		if shuttingDown {
+			if len(clientReadBuffers) == 0 {
+				log.Println("All clients closed. Shutting down server.")
+				break
+			}
+
+			if !time.Now().Before(shutdownDeadline) {
+				log.Printf(
+					"Shutdown timeout reached. Closing %d remaining clients.",
+					len(clientReadBuffers),
+				)
+
+				for fd := range clientReadBuffers {
+					closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
+				}
+
+				log.Println("Graceful shutdown timed out. Server stopped.")
+				break
+			}
 		}
 	}
 

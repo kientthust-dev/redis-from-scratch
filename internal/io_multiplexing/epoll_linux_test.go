@@ -16,7 +16,7 @@ func TestEpollWakeup(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		events, err := mux.Wait()
+		events, err := mux.Wait(-1)
 		if err != nil {
 			errCh <- err
 			return
