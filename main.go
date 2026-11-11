@@ -201,13 +201,26 @@ func main() {
 				}
 			}
 		}
+		// Exit the event loop after all clients have disconnected.
+		if shuttingDown && len(clientReadBuffers) == 0 {
+			log.Println("All clients closed. Shutting down server.")
+			break
+		}
 	}
+
 }
 
-func closeClient(fd int, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
+func closeClient(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
+	// Remove the client FD from epoll.
+	if err := mux.Remove(fd); err != nil {
+		log.Printf("Failed to remove client fd %d from epoll: %v", fd, err)
+	}
+
+	// Remove client buffers.
 	delete(clientReadBuffers, fd)
 	delete(clientWriteBuffers, fd)
 
+	// Close the client socket.
 	if err := syscall.Close(fd); err != nil {
 		log.Printf("Failed to close client fd %d: %v", fd, err)
 	}
@@ -234,14 +247,14 @@ func handleWritable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 				Op: io_multiplexing.OpRead | io_multiplexing.OpWrite,
 			}); updateErr != nil {
 				log.Printf("Failed to enable write events for fd %d: %v", fd, updateErr)
-				closeClient(fd, clientReadBuffers, clientWriteBuffers)
+				closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			}
 			return
 		}
 
 		if err != nil {
 			log.Printf("Write error on fd %d: %v", fd, err)
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
@@ -254,7 +267,7 @@ func handleWritable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 				Op: io_multiplexing.OpRead | io_multiplexing.OpWrite,
 			}); updateErr != nil {
 				log.Printf("Failed to enable write events for fd %d: %v", fd, updateErr)
-				closeClient(fd, clientReadBuffers, clientWriteBuffers)
+				closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			}
 			return
 		}
@@ -271,7 +284,7 @@ func handleWritable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 		Op: io_multiplexing.OpRead,
 	}); err != nil {
 		log.Printf("Failed to disable write events for fd %d: %v", fd, err)
-		closeClient(fd, clientReadBuffers, clientWriteBuffers)
+		closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 	}
 }
 
@@ -292,12 +305,12 @@ func handleReadable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 
 		if err != nil {
 			log.Printf("Read error on fd %d: %v", fd, err)
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
 		if n == 0 {
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
@@ -305,7 +318,7 @@ func handleReadable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 		clientReadBuffers[fd] = append(clientReadBuffers[fd], buf[:n]...)
 
 		// Process all complete requests and queue their responses.
-		processBufferedRequests(fd, clientReadBuffers, clientWriteBuffers)
+		processBufferedRequests(fd, mux, clientReadBuffers, clientWriteBuffers)
 
 		// Stop if the client was closed during request processing.
 		if _, ok := clientReadBuffers[fd]; !ok {
@@ -321,7 +334,7 @@ func handleReadable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 	}
 }
 
-func processBufferedRequests(fd int, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
+func processBufferedRequests(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
 	// Parse all complete RESP values in the buffer.
 	for len(clientReadBuffers[fd]) > 0 {
 		// Skip leading empty lines (CRLF).
@@ -346,13 +359,13 @@ func processBufferedRequests(fd int, clientReadBuffers map[int][]byte, clientWri
 
 		if err != nil {
 			log.Printf("RESP parse error on fd %d: %v", fd, err)
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
 		if consumed <= 0 || consumed > len(clientReadBuffers[fd]) {
 			log.Printf("Invalid consumed count on fd %d", fd)
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
@@ -376,7 +389,7 @@ func processBufferedRequests(fd int, clientReadBuffers map[int][]byte, clientWri
 
 		if err != nil {
 			log.Printf("Failed to encode response on fd %d: %v", fd, err)
-			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			closeClient(fd, mux, clientReadBuffers, clientWriteBuffers)
 			return
 		}
 
