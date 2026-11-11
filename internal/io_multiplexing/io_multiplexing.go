@@ -8,13 +8,16 @@ const (
 )
 
 type Event struct {
-	Fd int
-	Op Operation
+	Fd       int
+	Op       Operation
+	IsWakeup bool
 }
 
 type IOMultiplexer interface {
 	Monitor(event Event) error
 	Update(event Event) error
+	Remove(fd int) error
+	Wakeup() error
 	Wait() ([]Event, error)
 	Close() error
 }

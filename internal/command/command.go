@@ -52,6 +52,9 @@ func (cmd *Command) Handle() ([]byte, error) {
 	case "PING", "SET", "GET":
 		return cmd.handleString()
 
+	case "ECHO":
+		return cmd.handleEcho()
+
 	case "TTL", "EXPIRE":
 		return cmd.handleExpire()
 

@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"syscall"
 
 	"redis_core/internal/command"
@@ -57,8 +59,6 @@ func main() {
 		log.Fatalf("Invalid server IP address: %s", tcpAddr.IP)
 	}
 
-	defer syscall.Close(serverFd)
-
 	// Allow the address to be reused after restart
 	if err := syscall.SetsockoptInt(
 		serverFd,
@@ -98,17 +98,64 @@ func main() {
 	}
 	log.Printf("Server FD %d registered for read events", serverFd)
 
+	// Handle termination signals.
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signalCh)
+
+	go func() {
+		sig := <-signalCh
+
+		log.Printf("Received signal %s, initiating graceful shutdown", sig)
+
+		if err := mux.Wakeup(); err != nil {
+			log.Printf("Failed to wake up event loop: %v", err)
+		}
+	}()
+
 	// Wait for events and handle them
 	clientReadBuffers := make(map[int][]byte)
 	clientWriteBuffers := make(map[int][]byte)
+
+	shuttingDown := false
+
 	for {
 		events, err := mux.Wait()
 		if err != nil {
 			log.Fatalf("Failed to wait for events: %v", err)
 		}
 
+		// Process wakeup events first to prioritize shutdown.
 		for _, event := range events {
+			if event.IsWakeup && !shuttingDown {
+				log.Println("Event loop received wakeup event")
+
+				shuttingDown = true
+
+				// Stop monitoring the listening socket.
+				if err := mux.Remove(serverFd); err != nil {
+					log.Printf("Failed to remove server FD from epoll: %v", err)
+				}
+
+				// Close the listening socket.
+				if err := syscall.Close(serverFd); err != nil {
+					log.Printf("Failed to close server FD: %v", err)
+				} else {
+					log.Println("Stopped accepting new connections")
+				}
+			}
+		}
+
+		// Handle the remaining events
+		for _, event := range events {
+			if event.IsWakeup {
+				continue
+			}
+
 			if event.Fd == serverFd {
+				if shuttingDown {
+					continue
+				}
 				for {
 					connFd, _, err := syscall.Accept4(
 						serverFd,
@@ -231,7 +278,7 @@ func handleWritable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 func handleReadable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
 	buf := make([]byte, 4096)
 
-	// Read data form the non-blocking socket
+	// Read data from the non-blocking socket.
 	for {
 		n, err := syscall.Read(fd, buf)
 
@@ -254,75 +301,89 @@ func handleReadable(fd int, mux io_multiplexing.IOMultiplexer, clientReadBuffers
 			return
 		}
 
-		// Append  incoming bytes to this client's buffer
+		// Append incoming bytes to this client's buffer.
 		clientReadBuffers[fd] = append(clientReadBuffers[fd], buf[:n]...)
 
-		// Parse all complete RESP values int the buffer
-		for len(clientReadBuffers[fd]) > 0 {
-			value, consumed, err := protocol.Parse(clientReadBuffers[fd])
+		// Process all complete requests and queue their responses.
+		processBufferedRequests(fd, clientReadBuffers, clientWriteBuffers)
 
-			if err == protocol.ErrNeedMoreData {
-				// Preserve incomplete data for the next read event.
-				return
-			}
+		// Stop if the client was closed during request processing.
+		if _, ok := clientReadBuffers[fd]; !ok {
+			return
+		}
 
-			if err != nil {
-				log.Printf("RESP parse error on fd %d: %v", fd, err)
-				closeClient(fd, clientReadBuffers, clientWriteBuffers)
-				return
-			}
-
-			if consumed <= 0 || consumed > len(clientReadBuffers[fd]) {
-				log.Printf("Invalid consumed count on fd %d", fd)
-				closeClient(fd, clientReadBuffers, clientWriteBuffers)
-				return
-			}
-
-			// Convert RESP value into a command
-			cmd, err := command.ParseCommand(value)
-			var response []byte
-
-			if err != nil {
-				response, err = protocol.Encode(
-					protocol.RespError("ERR invalid command"),
-				)
-			} else {
-				// 5. Execute the command.
-				response, err = cmd.Handle()
-
-				if err != nil {
-					response, err = protocol.Encode(
-						protocol.RespError("ERR command failed"),
-					)
-				}
-			}
-
-			if err != nil {
-				log.Printf("Failed to encode response on fd %d: %v", fd, err)
-				closeClient(fd, clientReadBuffers, clientWriteBuffers)
-				return
-			}
-
-			// Consume the request that was successfully parsed.
-			clientReadBuffers[fd] = clientReadBuffers[fd][consumed:]
-
-			// Queue the response.
-			clientWriteBuffers[fd] = append(clientWriteBuffers[fd], response...)
-
-			// Try to write the response immediately.
+		// Try to write queued responses.
+		if len(clientWriteBuffers[fd]) > 0 {
 			handleWritable(fd, mux, clientReadBuffers, clientWriteBuffers)
-
-			// Stop if the client was closed by handleWritable.
-			if _, ok := clientReadBuffers[fd]; !ok {
-				return
-			}
-
-			// If a response remains pending, wait for EPOLLOUT.
-			if len(clientWriteBuffers[fd]) > 0 {
-				return
-			}
 		}
 
 		return
+	}
+}
+
+func processBufferedRequests(fd int, clientReadBuffers map[int][]byte, clientWriteBuffers map[int][]byte) {
+	// Parse all complete RESP values in the buffer.
+	for len(clientReadBuffers[fd]) > 0 {
+		// Skip leading empty lines (CRLF).
+		if clientReadBuffers[fd][0] == '\r' {
+			if len(clientReadBuffers[fd]) == 1 {
+				// Wait for the next byte to determine whether this is CRLF.
+				return
+			}
+
+			if clientReadBuffers[fd][1] == '\n' {
+				clientReadBuffers[fd] = clientReadBuffers[fd][2:]
+				continue
+			}
+		}
+
+		value, consumed, err := protocol.Parse(clientReadBuffers[fd])
+
+		if err == protocol.ErrNeedMoreData {
+			// Preserve incomplete data for the next read event.
+			return
+		}
+
+		if err != nil {
+			log.Printf("RESP parse error on fd %d: %v", fd, err)
+			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			return
+		}
+
+		if consumed <= 0 || consumed > len(clientReadBuffers[fd]) {
+			log.Printf("Invalid consumed count on fd %d", fd)
+			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			return
+		}
+
+		// Convert RESP value into a command.
+		cmd, err := command.ParseCommand(value)
+		var response []byte
+
+		if err != nil {
+			response, err = protocol.Encode(
+				protocol.RespError("ERR invalid command"),
+			)
+		} else {
+			response, err = cmd.Handle()
+
+			if err != nil {
+				response, err = protocol.Encode(
+					protocol.RespError("ERR command failed"),
+				)
+			}
+		}
+
+		if err != nil {
+			log.Printf("Failed to encode response on fd %d: %v", fd, err)
+			closeClient(fd, clientReadBuffers, clientWriteBuffers)
+			return
+		}
+
+		// Consume the successfully parsed request.
+		clientReadBuffers[fd] = clientReadBuffers[fd][consumed:]
+
+		// Queue the response without writing immediately.
+		clientWriteBuffers[fd] = append(clientWriteBuffers[fd], response...)
 	}
 }
